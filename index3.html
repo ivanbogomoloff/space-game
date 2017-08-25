@@ -1,0 +1,32 @@
+<html>
+<head>
+	<script src="js/phaser.js"></script>
+<!--	<script src="js/bootstrap.min.js"></script>-->
+<!--	<link rel="stylesheet" href="css/bootstrap.min.css">-->
+<!--	<link rel="stylesheet" href="css/bootstrap-theme.css">-->
+	<style>* { padding: 0; margin: 0; }</style>
+</head>
+<body>
+
+<script>
+
+	var ball;
+
+
+
+	var game = new Phaser.Game(480, 320, Phaser.AUTO, null, {
+		preload: preload, create: create, update: update
+	});
+
+	function preload() {
+		//game.cache.addImage('ball','ball.png');
+		game.stage.backgroundColor = '#aaa';
+		game.load.image('ball', 'ball.png');
+	}
+	function create() {
+		ball = game.add.sprite(50, 50, 'ball');
+	}
+	function update() {}
+</script>
+</body>
+</html>

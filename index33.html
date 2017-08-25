@@ -1,0 +1,18 @@
+<html>
+<head>
+	<script src="js/phaser.js"></script>
+	<!--<link rel="stylesheet" href="css/bootstrap-theme.css">-->
+	<style>* { padding: 0; margin: 0; }</style>
+	<title>PHASER</title>
+</head>
+<body>
+<script>
+	(function() {
+		var game = new Phaser.Game(1200, 600, Phaser.AUTO, null);
+
+		game.state.add('Game', Game);
+		game.state.start('Game');
+	})();
+</script>
+</body>
+</html>

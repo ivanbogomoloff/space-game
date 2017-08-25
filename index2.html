@@ -1,0 +1,487 @@
+<html>
+<head>
+	<script src="js/phaser.js"></script>
+<!--	<script src="js/bootstrap.min.js"></script>-->
+<!--	<link rel="stylesheet" href="css/bootstrap.min.css">-->
+<!--	<link rel="stylesheet" href="css/bootstrap-theme.css">-->
+	<style>* { padding: 0; margin: 0; }</style>
+	<title>PHASER</title>
+</head>
+<body>
+<!--<script>-->
+	<!--var game = new Phaser.Game(480, 320, Phaser.AUTO, null, {-->
+		<!--preload: preload, create: create, update: update-->
+	<!--});-->
+	<!--function preload() {}-->
+	<!--function create() {}-->
+	<!--function update() {}-->
+<!--</script>-->
+<script>
+	var GameState = function(game) {
+		this.MAX_MISSILES = 2; // number of missiles
+	};
+
+	// Load images and sounds
+	GameState.prototype.preload = function() {
+		this.game.load.spritesheet('ship', 'assets/gfx/ship.png', 32, 32);
+		this.game.load.image('ground', 'assets/gfx/ground.png');
+		this.game.load.spritesheet('explosion', 'assets/gfx/explosion.png', 128, 128);
+		this.game.load.image('rocket', 'assets/gfx/rocket.png');
+		this.game.load.image('smoke', '/assets/gfx/smoke.png');
+	};
+
+	// Setup the example
+	GameState.prototype.create = function() {
+		// Set stage background color
+		this.game.stage.backgroundColor = 0x333333;
+
+		// Define motion constants
+		this.ROTATION_SPEED = 180; // degrees/second
+		this.ACCELERATION = 400; // pixels/second/second
+		this.MAX_SPEED = 250; // pixels/second
+		this.DRAG = 0; // pixels/second
+		this.GRAVITY = 50; // pixels/second/second
+
+		// Add the ship to the stage
+		this.ship = this.game.add.sprite(0, 0, 'ship');
+
+		var rndX = this.game.rnd.integerInRange(-this.game.width + 100, this.game.width - 100);
+
+		this.game.ship = {x:rndX, y:this.game.height - 50, hp: 5};
+
+//		this.game.add.existing(
+//				new Missile(this.game, this.game.width/2, this.game.height - 16)
+//		);
+		this.game.input.activePointer.x = this.game.width/2;
+		this.game.input.activePointer.y = this.game.height/2 - 100;
+
+		// Create a group to hold the missile
+		this.missileGroup = this.game.add.group();
+
+		// Create a group for explosions
+		this.explosionGroup = this.game.add.group();
+
+		this.ship.anchor.setTo(0.5, 0.5);
+		this.ship.angle = -90; // Point the ship up
+
+		// Enable physics on the ship
+		this.game.physics.enable(this.ship, Phaser.Physics.ARCADE);
+
+		// Set maximum velocity
+		this.ship.body.maxVelocity.setTo(this.MAX_SPEED, this.MAX_SPEED); // x, y
+
+		// Add drag to the ship that slows it down when it is not accelerating
+		this.ship.body.drag.setTo(this.DRAG, this.DRAG); // x, y
+
+		// Choose a random starting angle and velocity for the ship
+		this.resetShip();
+
+		// Turn on gravity
+		game.physics.arcade.gravity.y = this.GRAVITY;
+
+		// Make ship bounce a little
+		this.ship.body.bounce.setTo(0.25, 0.25);
+
+		// Create some ground for the ship to land on
+		this.ground = this.game.add.group();
+		for(var x = 0; x < this.game.width; x += 32) {
+			// Add the ground blocks, enable physics on each, make them immovable
+			var groundBlock = this.game.add.sprite(x, this.game.height - 32, 'ground');
+			this.game.physics.enable(groundBlock, Phaser.Physics.ARCADE);
+			groundBlock.body.immovable = true;
+			groundBlock.body.allowGravity = false;
+			this.ground.add(groundBlock);
+		}
+
+		// Create a group for explosions
+		this.explosionGroup = this.game.add.group();
+
+		// Capture certain keys to prevent their default actions in the browser.
+		// This is only necessary because this is an HTML5 game. Games on other
+		// platforms may not need code like this.
+		this.game.input.keyboard.addKeyCapture([
+			Phaser.Keyboard.LEFT,
+			Phaser.Keyboard.RIGHT,
+			Phaser.Keyboard.UP,
+			Phaser.Keyboard.DOWN
+		]);
+	};
+
+	// Try to get a used explosion from the explosionGroup.
+	// If an explosion isn't available, create a new one and add it to the group.
+	// Setup new explosions so that they animate and kill themselves when the
+	// animation is complete.
+	GameState.prototype.getExplosion = function(x, y, animationType) {
+		// Get the first dead explosion from the explosionGroup
+		var explosion = this.explosionGroup.getFirstDead();
+
+		// If there aren't any available, create a new one
+		if (explosion === null) {
+			explosion = this.game.add.sprite(0, 0, 'explosion');
+			explosion.anchor.setTo(0.5, 0.5);
+
+			var animation;
+
+			// Add an animation for the explosion that kills the sprite when the
+			// animation is complete
+			switch (animationType) {
+				case 1:
+				default:
+					animation = explosion.animations.add('boom', [0,1,2,3], 60, false);
+					break;
+				case 2:
+					animation = explosion.animations.add('boom', [3,1,0,1,2,3], 60, false);
+					break;
+			}
+			//
+
+			animation.killOnComplete = true;
+
+			// Add the explosion sprite to the group
+			this.explosionGroup.add(explosion);
+		}
+
+		// Revive the explosion (set it's alive property to true)
+		// You can also define a onRevived event handler in your explosion objects
+		// to do stuff when they are revived.
+		explosion.revive();
+
+		// Move the explosion to the given coordinates
+		explosion.x = x;
+		explosion.y = y;
+
+		// Set rotation of the explosion at random for a little variety
+		explosion.angle = this.game.rnd.integerInRange(0, 360);
+
+		// Play the animation
+		explosion.animations.play('boom');
+
+		// Return the explosion itself in case we want to do anything else with it
+		return explosion;
+	};
+
+	GameState.prototype.resetShip = function() {
+		// Move the ship back to the top of the stage
+		console.log(this.ship.x);
+		console.log(this.ship.y);
+
+
+		this.ship.x = this.game.rnd.integerInRange(-this.game.width + 100, this.game.width - 100);
+		this.ship.y = this.game.height - 50;
+		this.game.ship.hp = 5;
+		this.ship.body.acceleration.setTo(0, 0);
+
+		// Select a random starting angle and velocity
+		//this.ship.angle = this.game.rnd.integerInRange(-180, 180);
+		this.ship.angle = -90;
+		//this.ship.body.velocity.setTo(this.game.rnd.integerInRange(100, 200), 0);
+		this.ship.body.velocity.setTo(0, 0);
+	};
+
+	// The update() method is called every frame
+	GameState.prototype.update = function() {
+		// Collide the ship with the ground
+		this.game.physics.arcade.collide(this.ship, this.ground);
+
+		if (this.ship.x !== undefined) {
+			this.game.ship.x = this.ship.x;
+		}
+		if (this.ship.y !== undefined) this.game.ship.y = this.ship.y;
+
+		// Keep the ship on the screen
+		if (this.ship.x > this.game.width) this.ship.x = 0;
+		if (this.ship.x < 0) this.ship.x = this.game.width;
+		if (this.ship.y < 0) this.ship.y = 0;
+
+		if (this.leftInputIsActive()) {
+			// If the LEFT key is down, rotate left
+			this.ship.body.angularVelocity = -this.ROTATION_SPEED;
+		} else if (this.rightInputIsActive()) {
+			// If the RIGHT key is down, rotate right
+			this.ship.body.angularVelocity = this.ROTATION_SPEED;
+		} else {
+			// Stop rotating
+			this.ship.body.angularVelocity = 0;
+		}
+
+		// Set a variable that is true when the ship is touching the ground
+		var onTheGround = this.ship.body.touching.down;
+
+		if (onTheGround) {
+			if (Math.abs(this.ship.body.velocity.y) > 20 || Math.abs(this.ship.body.velocity.x) > 30) {
+				// The ship hit the ground too hard.
+				// Blow it up and start the game over.
+				this.getExplosion(this.ship.x, this.ship.y, 2);
+				this.resetShip();
+			} else {
+				// We've landed!
+				// Stop rotating and moving and aim the ship up.
+				this.ship.body.angularVelocity = 0;
+				this.ship.body.velocity.setTo(0, 0);
+				this.ship.angle = -90;
+			}
+
+		}
+
+		if (this.upInputIsActive()) {
+			// If the UP key is down, thrust
+			// Calculate acceleration vector based on this.angle and this.ACCELERATION
+			this.ship.body.acceleration.x = Math.cos(this.ship.rotation) * this.ACCELERATION;
+			this.ship.body.acceleration.y = Math.sin(this.ship.rotation) * this.ACCELERATION;
+
+			// Show the frame from the spritesheet with the engine on
+			this.ship.frame = 1;
+		} else if(this.downInputIsActive()) {
+			this.ship.body.acceleration.x = -(Math.cos(this.ship.rotation) * this.ACCELERATION);
+			this.ship.body.acceleration.y = -(Math.sin(this.ship.rotation) * this.ACCELERATION);
+
+			this.ship.frame = 2;
+		} else {
+			// Otherwise, stop thrusting
+			this.ship.body.acceleration.setTo(0, 0);
+
+			// Show the frame from the spritesheet with the engine off
+			this.ship.frame = 0;
+		}
+
+		// If there are fewer than MAX_MISSILES, launch a new one
+		if (this.missileGroup.countLiving() < this.MAX_MISSILES) {
+			// Set the launch point to a random location below the bottom edge
+			// of the stage
+			this.launchMissile(this.game.rnd.integerInRange(50, this.game.width-50),
+					this.game.height + 50);
+		}
+
+		// If any missile is within a certain distance of the ship, blow it up
+		this.missileGroup.forEachAlive(function(m) {
+			var distance = this.game.math.distance(m.x, m.y,
+					this.game.ship.x, this.game.ship.y);
+			if (distance < 20) {
+				m.kill();
+				this.getExplosion(m.x, m.y);
+				this.game.ship.hp = this.game.ship.hp - 1;
+				if (this.game.ship.hp <= 0)
+				{
+					this.getExplosion(this.ship.x, this.ship.y, 2);
+					this.resetShip();
+				}
+			}
+		}, this);
+	};
+
+	// This function should return true when the player activates the "go left" control
+	// In this case, either holding the right arrow or tapping or clicking on the left
+	// side of the screen.
+	GameState.prototype.leftInputIsActive = function() {
+		var isActive = false;
+
+		isActive = this.input.keyboard.isDown(Phaser.Keyboard.LEFT);
+		isActive |= (this.game.input.activePointer.isDown &&
+		this.game.input.activePointer.x < this.game.width/4);
+
+		return isActive;
+	};
+
+	// This function should return true when the player activates the "go right" control
+	// In this case, either holding the right arrow or tapping or clicking on the right
+	// side of the screen.
+	GameState.prototype.rightInputIsActive = function() {
+		var isActive = false;
+
+		isActive = this.input.keyboard.isDown(Phaser.Keyboard.RIGHT);
+		isActive |= (this.game.input.activePointer.isDown &&
+		this.game.input.activePointer.x > this.game.width/2 + this.game.width/4);
+
+		return isActive;
+	};
+
+	// This function should return true when the player activates the "jump" control
+	// In this case, either holding the up arrow or tapping or clicking on the center
+	// part of the screen.
+	GameState.prototype.upInputIsActive = function() {
+		var isActive = false;
+
+		isActive = this.input.keyboard.isDown(Phaser.Keyboard.UP);
+		isActive |= (this.game.input.activePointer.isDown &&
+		this.game.input.activePointer.x > this.game.width/4 &&
+		this.game.input.activePointer.x < this.game.width/2 + this.game.width/4);
+
+		return isActive;
+	};
+
+	// DOWN
+	GameState.prototype.downInputIsActive = function() {
+		var isActive = false;
+
+		isActive = this.input.keyboard.isDown(Phaser.Keyboard.DOWN);
+//		isActive |= (this.game.input.activePointer.isDown &&
+//		this.game.input.activePointer.x > this.game.width/4 &&
+//		this.game.input.activePointer.x < this.game.width/2 + this.game.width/4);
+
+		return isActive;
+	};
+
+	// Try to get a missile from the missileGroup
+	// If a missile isn't available, create a new one and add it to the group.
+	GameState.prototype.launchMissile = function(x, y) {
+		// // Get the first dead missile from the missileGroup
+		var missile = this.missileGroup.getFirstDead();
+
+		// If there aren't any available, create a new one
+		if (missile === null) {
+			missile = new Missile(this.game);
+			this.missileGroup.add(missile);
+		}
+
+		// Revive the missile (set it's alive property to true)
+		// You can also define a onRevived event handler in your explosion objects
+		// to do stuff when they are revived.
+		missile.revive();
+
+		// Move the missile to the given coordinates
+		missile.x = x;
+		missile.y = y;
+
+		return missile;
+	};
+
+
+	// Missile constructor
+	var Missile = function(game, x, y) {
+		Phaser.Sprite.call(this, game, x, y, 'rocket');
+
+		// Set the pivot point for this sprite to the center
+		this.anchor.setTo(0.5, 0.5);
+
+		// Enable physics on the missile
+		game.physics.enable(this, Phaser.Physics.ARCADE);
+
+		// Define constants that affect motion
+		this.SPEED = 150; // missile speed pixels/second
+		this.TURN_RATE = 5; // turn rate in degrees/frame
+		this.WOBBLE_LIMIT = 15; // degrees
+		this.WOBBLE_SPEED = 250; // milliseconds
+		this.SMOKE_LIFETIME = 1000; // milliseconds
+		this.AVOID_DISTANCE = 70; // pixels
+
+		// Create a variable called wobble that tweens back and forth between
+		// -this.WOBBLE_LIMIT and +this.WOBBLE_LIMIT forever
+		this.wobble = this.WOBBLE_LIMIT;
+		this.game.add.tween(this)
+				.to(
+						{ wobble: -this.WOBBLE_LIMIT },
+						this.WOBBLE_SPEED, Phaser.Easing.Sinusoidal.InOut, true, 0,
+						Number.POSITIVE_INFINITY, true
+				);
+
+		// Add a smoke emitter with 100 particles positioned relative to the
+		// bottom center of this missile
+		this.smokeEmitter = this.game.add.emitter(0, 0, 100);
+
+		// Set motion parameters for the emitted particles
+		this.smokeEmitter.gravity = 0;
+		this.smokeEmitter.setXSpeed(0, 0);
+		this.smokeEmitter.setYSpeed(-80, -50); // make smoke drift upwards
+
+		// Make particles fade out after 1000ms
+		this.smokeEmitter.setAlpha(1, 0, this.SMOKE_LIFETIME,
+				Phaser.Easing.Linear.InOut);
+
+		// Create the actual particles
+		this.smokeEmitter.makeParticles('smoke');
+
+		// Start emitting smoke particles one at a time (explode=false) with a
+		// lifespan of this.SMOKE_LIFETIME at 50ms intervals
+		this.smokeEmitter.start(false, this.SMOKE_LIFETIME, 50);
+	};
+
+	// Missiles are a type of Phaser.Sprite
+	Missile.prototype = Object.create(Phaser.Sprite.prototype);
+	Missile.prototype.constructor = Missile;
+
+	Missile.prototype.update = function() {
+		// Calculate the angle from the missile to the mouse cursor game.input.x
+		// and game.input.y are the mouse position; substitute with whatever
+		// target coordinates you need.
+
+
+			// If this missile is dead, don't do any of these calculations
+			// Also, turn off the smoke emitter
+			if (!this.alive) {
+				this.smokeEmitter.on = false;
+				return;
+			} else {
+				this.smokeEmitter.on = true;
+			}
+
+			// Position the smoke emitter at the center of the missile
+			this.smokeEmitter.x = this.x;
+			this.smokeEmitter.y = this.y;
+
+			var targetAngle = this.game.math.angleBetween(
+					this.x, this.y,
+					this.game.ship.x, this.game.ship.y
+			);
+			targetAngle += this.game.math.degToRad(this.wobble);
+
+			// Make each missile steer away from other missiles.
+			// Each missile knows the group that it belongs to (missileGroup).
+			// It can calculate its distance from all other missiles in the group and
+			// steer away from any that are too close. This avoidance behavior prevents
+			// all of the missiles from bunching up too tightly and following the
+			// same track.
+			var avoidAngle = 0;
+			this.parent.forEachAlive(function(m) {
+				// Don't calculate anything if the other missile is me
+				if (this == m) return;
+
+				// Already found an avoidAngle so skip the rest
+				if (avoidAngle !== 0) return;
+
+				// Calculate the distance between me and the other missile
+				var distance = this.game.math.distance(this.x, this.y, m.x, m.y);
+
+				// If the missile is too close...
+				if (distance < this.AVOID_DISTANCE) {
+					// Chose an avoidance angle of 90 or -90 (in radians)
+					avoidAngle = Math.PI/2; // zig
+					if (Phaser.Utils.chanceRoll(50)) avoidAngle *= -1; // zag
+				}
+			}, this);
+
+			// Add the avoidance angle to steer clear of other missiles
+			targetAngle += avoidAngle;
+
+			// Gradually (this.TURN_RATE) aim the missile towards the target angle
+			if (this.rotation !== targetAngle) {
+				// Calculate difference between the current angle and targetAngle
+				var delta = targetAngle - this.rotation;
+
+				// Keep it in range from -180 to 180 to make the most efficient turns.
+				if (delta > Math.PI) delta -= Math.PI * 2;
+				if (delta < -Math.PI) delta += Math.PI * 2;
+
+				if (delta > 0) {
+					// Turn clockwise
+					this.angle += this.TURN_RATE;
+				} else {
+					// Turn counter-clockwise
+					this.angle -= this.TURN_RATE;
+				}
+
+				// Just set angle to target angle if they are close
+				if (Math.abs(delta) < this.game.math.degToRad(this.TURN_RATE)) {
+					this.rotation = targetAngle;
+				}
+			}
+
+			// Calculate velocity vector based on this.rotation and this.SPEED
+			this.body.velocity.x = Math.cos(this.rotation) * this.SPEED;
+			this.body.velocity.y = Math.sin(this.rotation) * this.SPEED;
+	};
+
+	var game = new Phaser.Game(1280, 860, Phaser.AUTO, 'game');
+	game.state.add('game', GameState, true);
+</script>
+</body>
+</html>

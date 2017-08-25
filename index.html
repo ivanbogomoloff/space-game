@@ -1,0 +1,265 @@
+<html>
+<head>
+	<script src="js/phaser.js"></script>
+<!--	<script src="js/bootstrap.min.js"></script>-->
+<!--	<link rel="stylesheet" href="css/bootstrap.min.css">-->
+<!--	<link rel="stylesheet" href="css/bootstrap-theme.css">-->
+	<style>* { padding: 0; margin: 0; }</style>
+	<title>PHASER</title>
+</head>
+<body>
+<script>
+	var game = new Phaser.Game(
+			800,
+			600,
+			Phaser.CANVAS,
+			'phaser-example',
+			{preload: preload, create: create, update: update, render: render }
+	);
+
+	function preload() {
+
+		//game.load.image('background','img/debug-grid-1920x1920.png');
+		game.load.image('background','assets/gfx/space_bg_8bit.png');
+		game.load.spritesheet('player','assets/ships/Ligher_rot.png', 32, 32);
+		game.load.image('bullet', 'assets/gfx/bullet.png');
+
+		game.load.image('planet_blue', 'assets/planets/planet_blue.png');
+	}
+
+	var player;
+	var cursors;
+
+	var weapon;
+	var fireButton;
+
+	var planets;
+
+
+	function create() {
+		game.add.tileSprite(0, 0, 1920, 1920, 'background');
+		game.world.setBounds(0, 0, 1920, 1920);
+		game.physics.startSystem(Phaser.Physics.ARCADE);
+
+
+		weapon = game.add.weapon(40, 'bullet');
+
+//		planetBlue = game.add.sprite(game.world.centerX + 30, game.world.centerY + 30, 'planet_blue');
+//		planetBlue.scale.set(1);
+//		planetBlue.smoothed = false;
+//		game.physics.enable(planetBlue, Phaser.Physics.ARCADE);
+//		planetBlue.body.immovable = true;
+//		planetBlue.body.allowGravity = false;
+//		//planetBlue.anchor.setTo(0.5, 0.5);
+//		planetBlue.body.setCircle(85);
+
+		planets = game.add.group();
+		planets.enableBody = true;
+
+		for (var i = 0; i < 4; i++)
+		{
+			var planet = planets.create(game.world.randomX, game.world.randomY, 'planet_blue');
+			planet.body.collideWorldBounds = true;
+			planet.body.immovable = true;
+			planet.name = 'planet' + i;
+
+			planet.scale.set(game.rnd.realInRange(2, 3.5));
+			setCircleBodyAnchorToCenter(planet, 0);
+
+			planet.smoothed = false;
+			//planet.body.allowGravity = false;
+		}
+
+		player = game.add.sprite(game.world.centerX, game.world.centerY, 'player');
+
+		weapon.setBulletFrames(0, 80, true);
+		weapon.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
+		//  The speed at which the bullet is fired
+		weapon.bulletSpeed = 400;
+
+		//  Speed-up the rate of fire, allowing them to shoot 1 bullet every 50ms
+		weapon.fireRate = 100;
+		weapon.trackSprite(player, 22, 0, true);
+		fireButton = this.input.keyboard.addKey(Phaser.KeyCode.SPACEBAR);
+
+		game.physics.arcade.enable([player, planets]);
+
+		cursors = game.input.keyboard.createCursorKeys();
+
+		game.camera.follow(player);
+
+		this.ROTATION_SPEED = 180; // degrees/second
+		this.ACCELERATION = 200; // pixels/second/second
+		this.MAX_SPEED = 250; // pixels/second
+		this.DRAG = 0; // pixels/second
+		this.GRAVITY = 50; // pixels/second/second
+		var ACCELERATION_TOWARDS_PLANET = 2500;
+
+		// game.physics.arcade.gravity.y = this.GRAVITY;
+
+		// Add the ship to the stage
+
+		player.scale.set(1.5);
+		player.anchor.set(0.5);
+
+		//prozrachnots ?
+		//player.alpha = 0.5;
+
+		setCircleBodyAnchorToCenter(player, 5);
+
+		//player.anchor.set(0.5*(player.scale.x/2));
+		player.angle = 0; // Point the ship up
+
+		// Set maximum velocity
+		player.body.maxVelocity.setTo(this.MAX_SPEED, this.MAX_SPEED); // x, y
+
+		// Add drag to the ship that slows it down when it is not accelerating
+		player.body.drag.setTo(this.DRAG, this.DRAG); // x, y
+		player.body.collideWorldBounds = true;
+
+		//player.smoothed = false;
+		player.animations.add('fly', [1,2,3,4], 10, true, true);
+		player.animations.add('strike', [5,6,7,8], 10, true, true);
+		player.animations.add('fly-and-strike', [9,10,11,12], 10, true, true);
+
+		player.frame = 0;
+
+
+
+
+	}
+	var forceReducer = 0.005;
+var gravityForce = 200;
+
+	function update() {
+//		planets.forEach(function(planet) {
+//
+//			planet.dist = Math.abs(player.body.x - planet.body.x) + Math.abs(player.body.y - planet.body.y);
+//			console.log(planet.name + ': ' + planet.dist, planet.radius);
+//
+//
+//			if (planet.dist <= planet.radius*5)
+//			{
+//				// Calculate gravity as the normalised vector from the ship to the planet
+//				player.body.gravity = new Phaser.Point(planet.body.x - player.body.x, planet.body.y - player.body.y);
+//				// Normalize and multiply by actual strength of gravity desired
+//				player.body.gravity = player.body.gravity.normalize().multiply(100, 100);
+//
+//				//game.physics.arcade.accelerateToObject(player, planet, 999);
+//			}
+//			else
+//			{
+//				// Calculate gravity as the normalised vector from the ship to the planet
+//				player.body.gravity = new Phaser.Point(planet.body.x - player.body.x, planet.body.y - player.body.y);
+//				// Normalize and multiply by actual strength of gravity desired
+//				player.body.gravity = player.body.gravity.normalize().multiply(0, 0);
+//			}
+//
+//				}, this
+//		);
+//		console.log('---------------------------');
+//		game.physics.arcade.collide(player, planets);
+
+
+
+
+		for(var j=0;j<planets.total;j++){
+			var p = planets.getChildAt(j);
+
+			// calculating distance between the planet and the crate
+
+			var distance = Phaser.Math.distance(player.x,player.y,p.x,p.y);
+
+			// checking if the distance is less than gravity radius
+
+			if(distance<p.width/2+p.radius/2){
+
+				// calculating angle between the planet and the crate
+
+				var angle = Phaser.Math.angleBetween(player.x,player.y,p.x,p.y);
+
+				// add gravity force to the crate in the direction of planet center
+				player.body.gravity = new Phaser.Point(gravityForce*Math.cos(angle)*forceReducer,gravityForce*Math.sin(angle)*forceReducer);
+				//player.body.gravity = ;
+			}
+		}
+
+
+
+
+
+		if (cursors.left.isDown)
+		{
+			player.body.angularVelocity = -this.ROTATION_SPEED;
+		}
+		else if (cursors.right.isDown)
+		{
+			player.body.angularVelocity = this.ROTATION_SPEED;
+		} else {
+			// Stop rotating
+			player.body.angularVelocity = 0;
+		}
+
+		if (cursors.up.isDown)
+		{
+			player.body.acceleration.x = Math.cos(player.rotation) * this.ACCELERATION;
+			player.body.acceleration.y = Math.sin(player.rotation) * this.ACCELERATION;
+			if (fireButton.isDown)
+			{
+				weapon.fire();
+				player.play('fly-and-strike');
+			}
+			else
+			{
+				// Show the frame from the spritesheet with the engine on
+				player.play('fly');
+			}
+		} else {
+			// Otherwise, stop thrusting
+			player.body.acceleration.setTo(0, 0);
+			if (fireButton.isDown)
+			{
+				weapon.fire();
+				player.play('strike');
+			}
+			else
+			{
+				// Show the frame from the spritesheet with the engine off
+				player.frame = 0;
+			}
+		}
+	}
+
+	function render() {
+
+		game.debug.cameraInfo(game.camera, 32, 32);
+		game.debug.spriteCoords(player, 32, 500);
+		game.debug.body(player);
+		planets.forEach( game.debug.body, game.debug);
+
+	}
+
+	/**
+	 *
+	 * @param elem
+	 * @param radiusExt
+	 */
+	function setCircleBodyAnchorToCenter(elem, radiusExt) {
+		elem.anchor.set(0.5);
+		var radius = elem.width/2;
+
+		elem.radius = radius;
+
+		radius = radius/elem.scale.x;
+		radius -= radiusExt;
+
+		elem.body.setCircle(
+				radius,
+				(-radius + 0.5 * elem.width / elem.scale.x),
+				(-radius + 0.5 * elem.height / elem.scale.y)
+		);
+	}
+
+</script>
+</body>
+</html>
